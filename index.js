@@ -6,12 +6,35 @@ const mongoose = require("mongoose")
 const User = require("./models/User")
 // my server instance
 const app = express()
+const Joi = require('joi');
+const bcryptjs = require("bcryptjs")
+
+
+// Todos : 
+// Improve my server  : 
+    // 1 - add Data validation with joi
+    // 
+//  
 
 
 
-// what is this ??????? Middlewares
 
-// are functions that exectue before getting to the endpoint
+const createUserValidation = Joi.object({
+    fullname : Joi.string().min(6).required(),
+
+    password: Joi.string()
+        .pattern(new RegExp('^[a-zA-Z0-9]{3,30}$')).required(),
+
+
+
+
+    email: Joi.string()
+        .email({ minDomainSegments: 2, tlds: { allow: ['com', 'net'] } }).required()
+})
+   
+
+
+
 app.use(cors())
 app.use(express.json())
 app.use(morgan("dev"))
@@ -44,13 +67,21 @@ app.get("/users/:id",async (req,res)=>{
 //create user 
 app.post("/users",async (req,res)=>{
     console.log(req.body)
-    let {fullname,email,password} = req.body
+    let validation = createUserValidation.validate(req.body)
+    if(validation.error){
+       return res.status(400).json({error : validation.error.details})
+    }
+    let userAlreadyExist = await User.findOne({email:validation.value.email})
+    console.log(userAlreadyExist)
+    if (userAlreadyExist){
+        return res.json({msg:"User with this email already exists"})
+    }
+    var salt = bcryptjs.genSaltSync(10);
+    let {password} = req.body
 
-    let user = new User({
-        fullname,
-        email,
-        password
-    })
+    var hashedPassword = bcryptjs.hashSync(password, salt);
+    
+    let user = new User({...validation.value,password : hashedPassword})
     await user.save()
 
     res.status(201).json(user)
